@@ -20,17 +20,21 @@ func main() {
 	defer conn.Close()
 	fmt.Println("Connection was successful! Peril game client connected to RabbitMQ!")
 
+	publishCh, err := conn.Channel()
+	if err != nil {
+		log.Fatalf("Could not create chanel: %v", err)
+	}
+
 	username, err := gamelogic.ClientWelcome()
 	if err != nil {
 		log.Fatalf("Error getting username: %v", err)
 	}
 	gs := gamelogic.NewGameState(username)
 
-	queueName := fmt.Sprintf("%s.%s", routing.PauseKey, username)
 	err = pubsub.SubscribeJSON(
 		conn,
 		routing.ExchangePerilDirect,
-		queueName,
+		routing.PauseKey+"."+gs.GetUsername(),
 		routing.PauseKey,
 		pubsub.SimpleQueueTransient,
 		handlerPause(gs))
@@ -39,6 +43,19 @@ func main() {
 		log.Fatalf("Could not subscribe to pause: %v", err)
 	}
 
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		routing.ArmyMovesPrefix+"."+gs.GetUsername(),
+		routing.ArmyMovesPrefix+".*",
+		pubsub.SimpleQueueTransient,
+		handlerMove(gs))
+
+	if err != nil {
+		log.Fatalf("Could not subscribe to army_moves: %v", err)
+	}
+
+	// REPL:
 	for {
 		words := gamelogic.GetInput()
 		if len(words) == 0 {
@@ -46,12 +63,22 @@ func main() {
 		}
 		switch words[0] {
 		case "move":
-			_, err = gs.CommandMove(words)
+			mv, err := gs.CommandMove(words)
 			if err != nil {
 				fmt.Printf("Could not make move: %v\n", err)
 				continue
 			}
-			fmt.Println("Move worked!")
+			err = pubsub.PublishJSON(
+				publishCh,
+				routing.ExchangePerilTopic,
+				routing.ArmyMovesPrefix+"."+gs.GetUsername(),
+				mv,
+			)
+			if err != nil {
+				fmt.Printf("error: %s\n", err)
+			}
+
+			fmt.Println("Move published!")
 		case "spawn":
 			err = gs.CommandSpawn(words)
 			if err != nil {
