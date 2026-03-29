@@ -49,10 +49,22 @@ func main() {
 		routing.ArmyMovesPrefix+"."+gs.GetUsername(),
 		routing.ArmyMovesPrefix+".*",
 		pubsub.SimpleQueueTransient,
-		handlerMove(gs))
+		handlerMove(gs, publishCh))
 
 	if err != nil {
 		log.Fatalf("Could not subscribe to army_moves: %v", err)
+	}
+
+	err = pubsub.SubscribeJSON(
+		conn,
+		routing.ExchangePerilTopic,
+		"war",
+		routing.WarRecognitionsPrefix+".*",
+		pubsub.SimpleQueueDurable,
+		handlerWar(gs))
+
+	if err != nil {
+		log.Fatalf("Could not subscribe to war: %v", err)
 	}
 
 	// REPL:
