@@ -30,6 +30,11 @@ func SubscribeJSON[T any](
 		return err
 	}
 
+	err = amqpCh.Qos(10, 0, false)
+	if err != nil {
+		fmt.Printf("Error in setting prefetch count: %v", err)
+	}
+
 	deliveries, err := amqpCh.Consume(amqpQueue.Name, "", false, false, false, false, nil)
 	if err != nil {
 		return err
@@ -72,6 +77,11 @@ func SubscribeGob[T any](
 	amqpCh, amqpQueue, err := DeclareAndBind(conn, exchange, queueName, key, queueType)
 	if err != nil {
 		return err
+	}
+
+	err = amqpCh.Qos(10, 0, false)
+	if err != nil {
+		fmt.Printf("Error in setting prefetch count: %v", err)
 	}
 
 	deliveries, err := amqpCh.Consume(amqpQueue.Name, "", false, false, false, false, nil)
